@@ -32,8 +32,8 @@ class CryptarithmeticSolver:
         # Equations.
         self.Equations = []
 
-        # Assignments list.
-        self.assignments = {}
+        # Assignments dictionary.
+        self.assignments = dict()
 
     # Function for finding the Equations.
     def equationGeneration(self):
@@ -124,6 +124,27 @@ class CryptarithmeticSolver:
             if self.assignments[assignedLetter] == value:
                 return False
         return True
+    
+    # Function to remove a value from a letter variables' domain if it exists.
+    # {R: [0,1,2,3,]}
+    def removeFromDomain(self, letter, value):
+        if value in self.domains[letter]:
+            for otherLetter in self.uniqueLetters:
+                if otherLetter != letter:
+                    if value in self.domains[otherLetter]:
+                        self.domains[otherLetter].remove(value)
+
+    # Function to restore the letter's domain (used in backtracking).
+    def restoreDomain(self, letter):
+       for otherLetter in self.domains:
+           self.domains[otherLetter].append(self.assignments[letter])
+
+    # Function for forward checking.
+    # def forwardChecking():
+    # 1. Start from last equation.
+
+           
+
 
 
 
