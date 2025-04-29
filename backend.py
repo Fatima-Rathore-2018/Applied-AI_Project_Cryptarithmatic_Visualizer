@@ -11,7 +11,7 @@ class CryptarithmeticSolver:
 
         self.wordList = [word1, word2, word3]
 
-        self.uniqueLetters = set(''.join(self.words))
+        self.uniqueLetters = set(''.join(self.wordList))
 
         # Initialize the domains for each letter.
         self.domains = {}
@@ -24,34 +24,71 @@ class CryptarithmeticSolver:
         self.domains[self.word3[0]] = list(range(1, 10))
 
         # Carry variables and their domain.
-        self.carryVariables = []
+        self.carryVariables = [f'C{i}' for i in range(len(self.word3) + 1)]
         self.carryDomain = {}
         for carry in self.carryVariables:
             self.carryDomain[carry] = list(range(2))
 
         # Equations.
+        self.Equations = []
 
         # Assignments list.
         self.assignments = {}
 
-        # Function for MRV (Minimum Remaning Value).
-        def mrv(self):
-            unassignedVariables = []
-            for variable in self.domains:
-                if variable not in self.assignments:
-                    unassignedVariables.append(variable)
-
-            # Return 0 if all variables have been assigned.
-            if len(unassignedVariables) == 0:
-                return 0
+    # Function for finding the Equations.
+    def equationGeneration(self):
+        for i in range(len(self.word3)):
+            sumOfColumn = []
+            leftHandSide = []
             
-            # Search for the variable with least domain size.
-            smallestDomainLetter = unassignedVariables[0]
-            for variable in unassignedVariables:
-                if len(self.domains[variable]) < len(self.domains[smallestDomainVar]):
-                    smallestDomainVar = variable
+            # Reading letters from left to right.
+            # Letters from the current column - Operands
+            if i < len(self.word1):
+                sumOfColumn.append(self.word1[-(i+1)])
 
-            return smallestDomainLetter
+            if i < len(self.word2):
+                sumOfColumn.append(self.word2[-(i+1)])
+            # Letters of the result
+            result = self.word3[-(i+1)]
+
+            # Formulating Equation:
+            # Add the carry if not at the first column.
+            # Left Hand Side = Operand1 + Operand2 + Carry.
+            if i > 0:
+                leftHandSide.append(f"C{i}")
+            
+            leftHandSide.extend(sumOfColumn)
+            leftHandSide = ' + '.join(leftHandSide)
+
+            # Right Hand Side = result + 10*Next Carry
+            if i < len(self.word3) - 1:
+                rightHandSide = f"{result} + 10*C{i + 1}"
+            else:# If the first column then just the result.
+                rightHandSide = f"{result}"
+
+            self.Equations.append(f"{leftHandSide} = {rightHandSide}")
+        
+        return self.Equations
+            
+
+    # Function for MRV (Minimum Remaning Value).
+    def mrv(self):
+        unassignedVariables = []
+        for variable in self.domains:
+            if variable not in self.assignments:
+                unassignedVariables.append(variable)
+
+        # Return 0 if all variables have been assigned.
+        if len(unassignedVariables) == 0:
+            return 0
+        
+        # Search for the variable with least domain size.
+        smallestDomainLetter = unassignedVariables[0]
+        for variable in unassignedVariables:
+            if len(self.domains[variable]) < len(self.domains[smallestDomainVar]):
+                smallestDomainVar = variable
+
+        return smallestDomainLetter
         
         # Function for LCV (least constraining value).
         # def lcv():
