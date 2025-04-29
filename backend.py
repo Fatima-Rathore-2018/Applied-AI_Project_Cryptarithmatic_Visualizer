@@ -69,7 +69,6 @@ class CryptarithmeticSolver:
             self.Equations.append(f"{leftHandSide} = {rightHandSide}")
         
         return self.Equations
-            
 
     # Function for MRV (Minimum Remaning Value).
     def mrv(self):
@@ -90,8 +89,41 @@ class CryptarithmeticSolver:
 
         return smallestDomainLetter
         
-        # Function for LCV (least constraining value).
-        # def lcv():
+    # Function for LCV (Least Constraining Value).
+    def lcv(self, letter):
+        # List of all possible values for this letter.
+        possibleValues = self.domains[letter]
+
+        # List to check how many other letters each value of the current letter affect.
+        valueConstraints = []
+
+        # Count the number of other letters affected by a specific value of this letter.
+        count = 0
+        for value in possibleValues:
+            for otherLetter in self.domains:
+                if otherLetter != letter:
+                    if value in self.domains[otherLetter]:
+                        count += 1
+
+            # Store the value with its count in valueConstraints list.
+            valueConstraints.append((count, value))
+
+        # Sort the values so they are from least to most constraining.
+        valueConstraints.sort()
+
+        # Store the values in a list and return it.
+        sortedValues = []
+        for (count, value) in valueConstraints:
+            sortedValues.append(value)
+
+        return sortedValues
+    
+    def isConsistent(self, letter, value):
+        # Check if value is already assigned to another variable (AllDiff constraint).
+        for assignedLetter in self.assignments:
+            if self.assignments[assignedLetter] == value:
+                return False
+        return True
 
 
 
