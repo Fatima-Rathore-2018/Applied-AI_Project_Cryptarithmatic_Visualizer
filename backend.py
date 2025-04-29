@@ -140,8 +140,35 @@ class CryptarithmeticSolver:
            self.domains[otherLetter].append(self.assignments[letter])
 
     # Function for forward checking.
-    # def forwardChecking():
-    # 1. Start from last equation.
+    # assignments:   {A: 1, B: 2}
+    def forwardChecking(self):
+        # 1. Start from last equation - Assign that letter 1 and its carry variable is also 1.
+        # 2. Go to second last equation. 
+            # - Use MRV to choose which letter to assign value to next.
+            # - Store all combinations of values.
+            # - Assign value to that chosen letter using LCV and update domain.
+        # 3. Go to third last equation and repeat.
+        # 4. In case no value satisfies equations, backtrack.
+
+        i = 1
+        #j = len(self.Equations)
+        for equation in reversed(self.Equations):
+            # Special assignment for last equation.
+            if i == 1:
+                self.carryVariables[-1] = 1
+                self.assignments[self.word3[0]] = 1
+                self.removeFromDomain(self.word3[0], 1)
+
+            else:
+                selectedLetter = self.mrv()
+                
+
+
+
+            
+
+
+    
 
            
 
