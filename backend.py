@@ -2,7 +2,7 @@ import re
 import itertools
 
 class CryptarithmeticSolver:
-    def __init__(self, word1, word2, word3):
+    def _init_(self, word1, word2, word3):
         # Storing the three words in uppercase.
         self.word1 = word1.upper()
         self.word2 = word2.upper()
@@ -86,40 +86,11 @@ class CryptarithmeticSolver:
         # Search for the variable with least domain size.
         smallestDomainLetter = unassignedVariables[0]
         for variable in unassignedVariables:
-            if len(self.domains[variable]) < len(self.domains[smallestDomainLetter]):
-                smallestDomainLetter = variable
+            if len(self.domains[variable]) < len(self.domains[smallestDomainVar]):
+                smallestDomainVar = variable
 
         return smallestDomainLetter
         
-    # Function for LCV (Least Constraining Value).
-    # def lcv(self, letter):
-    #     # List of all possible values for this letter.
-    #     possibleValues = self.domains[letter]
-
-    #     # List to check how many other letters each value of the current letter affect.
-    #     valueConstraints = []
-
-    #     # Count the number of other letters affected by a specific value of this letter.
-    #     count = 0
-    #     for value in possibleValues:
-    #         for otherLetter in self.domains:
-    #             if otherLetter != letter:
-    #                 if value in self.domains[otherLetter]:
-    #                     count += 1
-
-    #         # Store the value with its count in valueConstraints list.
-    #         valueConstraints.append((count, value))
-
-    #     # Sort the values so they are from least to most constraining.
-    #     valueConstraints.sort()
-
-    #     # Store the values in a list and return it.
-    #     sortedValues = []
-    #     for (count, value) in valueConstraints:
-    #         sortedValues.append(value)
-
-    #     return sortedValues
-
     def lcv(self, letterByMRV, comboList):
         possibleValues = self.domains[letterByMRV]
         valueConstraints = []
@@ -188,10 +159,6 @@ class CryptarithmeticSolver:
 
             else:
                 selectedLetter = self.mrv()
-                if not selectedLetter:
-                    return False
-                
-                # equation = analyzeEquations(equation)
 
             # Noor's function will return this list.
             valid_combos = []
@@ -200,76 +167,6 @@ class CryptarithmeticSolver:
             filteredCombinations = self.applyAllDiffForLetters(valid_combos)
 
             sortedValues = self.lcv(selectedLetter, filteredCombinations)
-                
-    # Function to properly evaluate the equations.
-    def analyzeEquations(self, equation):
-        # Get all the letters in the equation.
-        letters = list()
-        for char in equation:
-            if char.isalpha():
-                letters.append(char)
-
-        # Separate the already assigned and unassigned letters.
-        assignedLetters = {}
-        unassignedLetters = []
-        for letter in letters:
-            if letter in self.assignments:
-                assignedLetters[letter] = self.assignments[letter]
-            else:
-                unassignedLetters.append(letter)
-
-        # Get the domain for each unassigned letter.
-        # domains = []
-        # for letter in unassignedLetters:
-
-    def applyAllDiffForLetters(self, valid_combos):
-        filteredCombinations = []
-
-        for combo in valid_combos:
-            # Extract letters (exclude carry variables).
-            letterValues = []
-            carryValues = []
-
-            # Iterate over each key-value pair in the combo dictionary.
-            for key, value in combo.items():
-
-                if not key.startswith('C') and len(key) == 1:  
-                    letterValues.append(value) 
-                elif key.startswith('C') and len(key) > 1:  
-                    carryValues.append(value)   
-                
-            # Check if all letters have unique digits.
-            if len(letterValues) == len(set(letterValues)):  
-                filteredCombinations.append(combo)  
-
-        return filteredCombinations
-
-
-    
-    
-
-
-
-
-        
-
-
-                
-   
-                
-            
-                
-                
-
-
-
-            
-
-
-    
-
-           
-
 
     def extractLettersFromEquations(self, equation):
         return set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', equation))
@@ -313,13 +210,25 @@ class CryptarithmeticSolver:
         
         #print(valid_combos)
         return validCombos
+    
+    def applyAllDiffForLetters(self, valid_combos):
+        filteredCombinations = []
 
-        
+        for combo in valid_combos:
+            # Extract letters (exclude carry variables).
+            letterValues = []
+            carryValues = []
 
+            # Iterate over each key-value pair in the combo dictionary.
+            for key, value in combo.items():
 
+                if not key.startswith('C') and len(key) == 1:  
+                    letterValues.append(value) 
+                elif key.startswith('C') and len(key) > 1:  
+                    carryValues.append(value)   
+                
+            # Check if all letters have unique digits.
+            if len(letterValues) == len(set(letterValues)):  
+                filteredCombinations.append(combo)  
 
-
-
-        
-
-
+        return filteredCombinations
