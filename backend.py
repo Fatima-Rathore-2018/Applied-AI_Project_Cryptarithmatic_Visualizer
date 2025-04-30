@@ -2,7 +2,7 @@ import re
 import itertools
 
 class CryptarithmeticSolver:
-    def _init_(self, word1, word2, word3):
+    def __init__(self, word1, word2, word3):
         # Storing the three words in uppercase.
         self.word1 = word1.upper()
         self.word2 = word2.upper()
@@ -86,8 +86,8 @@ class CryptarithmeticSolver:
         # Search for the variable with least domain size.
         smallestDomainLetter = unassignedVariables[0]
         for variable in unassignedVariables:
-            if len(self.domains[variable]) < len(self.domains[smallestDomainVar]):
-                smallestDomainVar = variable
+            if len(self.domains[variable]) < len(self.domains[smallestDomainLetter]):
+                smallestDomainLetter = variable
 
         return smallestDomainLetter
         
@@ -100,7 +100,7 @@ class CryptarithmeticSolver:
 
             for combo in comboList:
                 if letterByMRV in combo:
-                    if value in combo[letterByMRV]:
+                    if combo[letterByMRV] == value:
                         constrainedCount += 1
 
             # Store how many times this value constrains others.
@@ -134,39 +134,88 @@ class CryptarithmeticSolver:
 
     # Function to restore the letter's domain (used in backtracking).
     def restoreDomain(self, letter):
-       for otherLetter in self.domains:
-           self.domains[otherLetter].append(self.assignments[letter])
+        value = self.assignments.get(letter)
+        if value is not None:
+            for otherLetter in self.domains:
+                if value not in self.domains[otherLetter]:
+                    self.domains[otherLetter].append(value)
+            self.assignments.pop(letter)
 
     # Function for forward checking.
     # assignments:   {A: 1, B: 2}
+    # def forwardChecking(self):
+    #     # 1. Start from last equation - Assign that letter 1 and its carry variable is also 1.
+    #     # 2. Go to second last equation. 
+    #         # - Use MRV to choose which letter to assign value to next.
+    #         # - Store all combinations of values.
+    #         # - Assign value to that chosen letter using LCV and update domain.
+    #     # 3. Go to third last equation and repeat.
+    #     # 4. In case no value satisfies equations, backtrack.
+
+    #     i = 1
+    #     #j = len(self.Equations)
+    #     for equation in reversed(self.Equations):
+    #         # Special assignment for last equation.
+    #         if i == 1:
+    #             self.carryVariables[-1] = 1
+    #             self.assignments[self.word3[0]] = 1
+    #             self.removeFromDomain(self.word3[0], 1)
+
+    #         else:
+    #             selectedLetter = self.mrv()
+
+    #         # Noor's function will return this list.
+    #         valid_combos = self.findValidCombinations(equation)
+
+    #         # Get filtered combo list and apply LCV.
+    #         filteredCombinations = self.applyAllDiffForLetters(valid_combos)
+    #         sortedValues = self.lcv(selectedLetter, filteredCombinations)
+
     def forwardChecking(self):
-        # 1. Start from last equation - Assign that letter 1 and its carry variable is also 1.
-        # 2. Go to second last equation. 
-            # - Use MRV to choose which letter to assign value to next.
-            # - Store all combinations of values.
-            # - Assign value to that chosen letter using LCV and update domain.
-        # 3. Go to third last equation and repeat.
-        # 4. In case no value satisfies equations, backtrack.
+        # Base case: if all letters are assigned, we are done
+        if len(self.assignments) == len(self.uniqueLetters):
+            return True
 
-        i = 1
-        #j = len(self.Equations)
-        for equation in reversed(self.Equations):
-            # Special assignment for last equation.
-            if i == 1:
-                self.carryVariables[-1] = 1
-                self.assignments[self.word3[0]] = 1
-                self.removeFromDomain(self.word3[0], 1)
+        # MRV: get the next variable to assign
+        selectedLetter = self.mrv()
+        if not selectedLetter:
+            return False
 
-            else:
-                selectedLetter = self.mrv()
+        # Get all equations (constraints) that include this letter
+        relatedEquations = [eq for eq in self.Equations if selectedLetter in eq]
 
-            # Noor's function will return this list.
-            valid_combos = []
+        for equation in relatedEquations:
+            # Find all valid combinations that satisfy the equation
+            
+            equation = equation.replace('=', '==', 1)
+            valid_combos = self.findValidCombinations(equation)
+            if not valid_combos:
+                return False
 
-            # Get filtered combo list and apply LCV
+            # Filter valid combos by AllDiff constraint
             filteredCombinations = self.applyAllDiffForLetters(valid_combos)
+            if not filteredCombinations:
+                return False
 
+            # Get sorted values for selectedLetter using LCV
             sortedValues = self.lcv(selectedLetter, filteredCombinations)
+
+            # Try values one by one
+            for value in sortedValues:
+                if self.isConsistent(selectedLetter, value):
+                    self.assignments[selectedLetter] = value
+                    self.removeFromDomain(selectedLetter, value)
+
+                    # Recursive call
+                    if self.forwardChecking():
+                        return True
+
+                    # Backtrack
+                    del self.assignments[selectedLetter]
+                    self.restoreDomain(selectedLetter)
+
+        return False
+
 
     def extractLettersFromEquations(self, equation):
         return set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', equation))
@@ -195,7 +244,11 @@ class CryptarithmeticSolver:
 
         domainOfUnassignedLetter = {}
         for letters in unassignedLetters:
-            domainOfUnassignedLetter[letters] = self.domains[letters]
+            # domainOfUnassignedLetter[letters] = self.domains[letters]
+            if letters in self.domains:
+                domainOfUnassignedLetter[letters] = self.domains[letters]
+            elif letters in self.carryDomain:
+                domainOfUnassignedLetter[letters] = self.carryDomain[letters]
 
         # Finding all possible combinations:
         validCombos = []
@@ -206,7 +259,7 @@ class CryptarithmeticSolver:
             assignments = dict(zip(unassignedLetters, values))
             #print(assignments)
             if eval(updatedEquation, {}, assignments):
-                 validCombos.append(assignments)
+                validCombos.append(assignments)
         
         #print(valid_combos)
         return validCombos
@@ -232,3 +285,32 @@ class CryptarithmeticSolver:
                 filteredCombinations.append(combo)  
 
         return filteredCombinations
+
+def test():
+    # Create a solver instance
+    solver = CryptarithmeticSolver("SEND", "MORE", "MONEY")
+
+    # Generate equations
+    equations = solver.equationGeneration()
+    print("Generated Equations:")
+    for eq in equations:
+        print(eq)
+
+    # Solve the puzzle
+    print("\nSolving...")
+    result = solver.forwardChecking()
+
+    # Display result
+    if result:
+        print("\nSolution Found:")
+        for letter, digit in solver.assignments.items():
+            print(f"{letter} = {digit}")
+    else:
+        print("\nNo solution found.")
+
+    print(solver.assignments)
+
+if __name__ == "__main__":
+    test()
+
+
