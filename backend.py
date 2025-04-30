@@ -1,3 +1,5 @@
+import re
+import itertools
 
 class CryptarithmeticSolver:
     def __init__(self, word1, word2, word3):
@@ -125,8 +127,48 @@ class CryptarithmeticSolver:
                 return False
         return True
 
+    def extractLettersFromEquations(self, equation):
+        return set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', equation))
 
+    # Function to find the possible combinations.
+    def findValidCombinations(self, equation):
+        # Get all the letters in the equation.
+        variables = self.extractLettersFromEquations(equation)
 
+        assignedLetters = {}
+        unassignedLetters = []
+
+        for v in variables:
+            if v in self.assignments:
+                assignedLetters[v] = self.assignments[v]
+            else:
+                unassignedLetters.append(v)
+
+        updatedEquation = equation
+        for var, val in assignedLetters.items():
+            #print(var)
+            #print(val)
+            updatedEquation = updatedEquation.replace(var, str(val))
+
+        #print(updatedEquation)
+
+        domainOfUnassignedLetter = {}
+        for letters in unassignedLetters:
+            domainOfUnassignedLetter[letters] = self.domains[letters]
+
+        # Finding all possible combinations:
+        validCombos = []
+
+        print(domainOfUnassignedLetter)
+        for values in itertools.product(*domainOfUnassignedLetter.values()):
+            #print(values)
+            assignments = dict(zip(unassignedLetters, values))
+            #print(assignments)
+            if eval(updatedEquation, {}, assignments):
+                 validCombos.append(assignments)
+        
+        #print(valid_combos)
+        return validCombos
 
         
 
