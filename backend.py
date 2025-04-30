@@ -167,7 +167,7 @@ class CryptarithmeticSolver:
     def forwardChecking(self):
         # Base case: if all letters are assigned, we are done
         if len(self.assignments) == len(self.uniqueLetters):
-            return True
+            return self.isSolutionValid()
 
         # MRV: get the next variable to assign
         selectedLetter = self.mrv()
@@ -192,7 +192,6 @@ class CryptarithmeticSolver:
 
             # Get sorted values for selectedLetter using LCV
             sortedValues = self.lcv(selectedLetter, filteredCombinations)
-
             # Try values one by one
             for value in sortedValues:
                 if self.isConsistent(selectedLetter, value):
@@ -208,6 +207,11 @@ class CryptarithmeticSolver:
 
         return False
 
+    def isSolutionValid(self):
+        w1 = int(''.join(str(self.assignments[c]) for c in self.word1))
+        w2 = int(''.join(str(self.assignments[c]) for c in self.word2))
+        w3 = int(''.join(str(self.assignments[c]) for c in self.word3))
+        return w1 + w2 == w3
 
     def extractLettersFromEquations(self, equation):
         return set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', equation))
@@ -280,7 +284,7 @@ class CryptarithmeticSolver:
 
 def test():
     # Create a solver instance
-    solver = CryptarithmeticSolver("SEND", "MORE", "MONEY")
+    solver = CryptarithmeticSolver("TWO", "TWO", "FOUR")
 
     # Generate equations
     equations = solver.equationGeneration()
