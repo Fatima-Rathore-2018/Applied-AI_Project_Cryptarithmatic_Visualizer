@@ -84,36 +84,61 @@ class CryptarithmeticSolver:
         # Search for the variable with least domain size.
         smallestDomainLetter = unassignedVariables[0]
         for variable in unassignedVariables:
-            if len(self.domains[variable]) < len(self.domains[smallestDomainVar]):
-                smallestDomainVar = variable
+            if len(self.domains[variable]) < len(self.domains[smallestDomainLetter]):
+                smallestDomainLetter = variable
 
         return smallestDomainLetter
         
     # Function for LCV (Least Constraining Value).
-    def lcv(self, letter):
-        # List of all possible values for this letter.
-        possibleValues = self.domains[letter]
+    # def lcv(self, letter):
+    #     # List of all possible values for this letter.
+    #     possibleValues = self.domains[letter]
 
-        # List to check how many other letters each value of the current letter affect.
+    #     # List to check how many other letters each value of the current letter affect.
+    #     valueConstraints = []
+
+    #     # Count the number of other letters affected by a specific value of this letter.
+    #     count = 0
+    #     for value in possibleValues:
+    #         for otherLetter in self.domains:
+    #             if otherLetter != letter:
+    #                 if value in self.domains[otherLetter]:
+    #                     count += 1
+
+    #         # Store the value with its count in valueConstraints list.
+    #         valueConstraints.append((count, value))
+
+    #     # Sort the values so they are from least to most constraining.
+    #     valueConstraints.sort()
+
+    #     # Store the values in a list and return it.
+    #     sortedValues = []
+    #     for (count, value) in valueConstraints:
+    #         sortedValues.append(value)
+
+    #     return sortedValues
+
+    def lcv(self, letterByMRV, comboList):
+        possibleValues = self.domains[letterByMRV]
         valueConstraints = []
 
-        # Count the number of other letters affected by a specific value of this letter.
-        count = 0
         for value in possibleValues:
-            for otherLetter in self.domains:
-                if otherLetter != letter:
-                    if value in self.domains[otherLetter]:
-                        count += 1
+            constrainedCount = 0
 
-            # Store the value with its count in valueConstraints list.
-            valueConstraints.append((count, value))
+            for combo in comboList:
+                if letterByMRV in combo:
+                    if value in combo[letterByMRV]:
+                        constrainedCount += 1
 
-        # Sort the values so they are from least to most constraining.
+            # Store how many times this value constrains others.
+            valueConstraints.append((constrainedCount, value))
+
+        # Sort the values so that the list is sorted by least to most constraining value.
         valueConstraints.sort()
 
-        # Store the values in a list and return it.
+        # Return just the values in sorted order.
         sortedValues = []
-        for (count, value) in valueConstraints:
+        for count, value in valueConstraints:
             sortedValues.append(value)
 
         return sortedValues
@@ -161,6 +186,77 @@ class CryptarithmeticSolver:
 
             else:
                 selectedLetter = self.mrv()
+                if not selectedLetter:
+                    return False
+                
+                # equation = analyzeEquations(equation)
+
+            # Noor's function will return this list.
+            valid_combos = []
+
+            # Get filtered combo list and apply LCV
+            filteredCombinations = self.applyAllDiffForLetters(valid_combos)
+
+            sortedValues = self.lcv(selectedLetter, filteredCombinations)
+                
+    # Function to properly evaluate the equations.
+    def analyzeEquations(self, equation):
+        # Get all the letters in the equation.
+        letters = list()
+        for char in equation:
+            if char.isalpha():
+                letters.append(char)
+
+        # Separate the already assigned and unassigned letters.
+        assignedLetters = {}
+        unassignedLetters = []
+        for letter in letters:
+            if letter in self.assignments:
+                assignedLetters[letter] = self.assignments[letter]
+            else:
+                unassignedLetters.append(letter)
+
+        # Get the domain for each unassigned letter.
+        # domains = []
+        # for letter in unassignedLetters:
+
+    def applyAllDiffForLetters(self, valid_combos):
+        filteredCombinations = []
+
+        for combo in valid_combos:
+            # Extract letters (exclude carry variables).
+            letterValues = []
+            carryValues = []
+
+            # Iterate over each key-value pair in the combo dictionary.
+            for key, value in combo.items():
+
+                if not key.startswith('C') and len(key) == 1:  
+                    letterValues.append(value) 
+                elif key.startswith('C') and len(key) > 1:  
+                    carryValues.append(value)   
+                
+            # Check if all letters have unique digits.
+            if len(letterValues) == len(set(letterValues)):  
+                filteredCombinations.append(combo)  
+
+        return filteredCombinations
+
+
+    
+    
+
+
+
+
+        
+
+
+                
+   
+                
+            
+                
                 
 
 
