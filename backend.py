@@ -127,19 +127,12 @@ class CryptarithmeticSolver:
     # {R: [0,1,2,3,]}
     def removeFromDomain(self, letter, value):
         if value in self.domains[letter]:
-            for otherLetter in self.uniqueLetters:
-                if otherLetter != letter:
-                    if value in self.domains[otherLetter]:
-                        self.domains[otherLetter].remove(value)
+            self.domains[letter].remove(value)
 
     # Function to restore the letter's domain (used in backtracking).
-    def restoreDomain(self, letter):
-        value = self.assignments.get(letter)
-        if value is not None:
-            for otherLetter in self.domains:
-                if value not in self.domains[otherLetter]:
-                    self.domains[otherLetter].append(value)
-            self.assignments.pop(letter)
+    def restoreDomain(self, letter, value):
+        if value not in self.domains[letter]:
+            self.domains[letter].append(value)
 
     # Function for forward checking.
     # assignments:   {A: 1, B: 2}
@@ -206,13 +199,12 @@ class CryptarithmeticSolver:
                     self.assignments[selectedLetter] = value
                     self.removeFromDomain(selectedLetter, value)
 
-                    # Recursive call
                     if self.forwardChecking():
                         return True
 
                     # Backtrack
                     del self.assignments[selectedLetter]
-                    self.restoreDomain(selectedLetter)
+                    self.restoreDomain(selectedLetter, value)
 
         return False
 
