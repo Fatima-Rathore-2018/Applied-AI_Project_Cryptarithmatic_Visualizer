@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,6 +25,8 @@ type SolutionStep = {
   assign?: string
   value?: number
   current?: { [key: string]: number }
+  stepType?: string
+  equationsUsed?: number[]
 }
 
 // Color palette for digits
@@ -40,6 +42,24 @@ const DIGIT_COLORS = [
   "bg-emerald-500", // 8
   "bg-green-500", // 9
 ]
+
+// Add a helper to build query string for EventSource
+function buildQuery(params: Record<string, string>) {
+  return (
+    '?' +
+    Object.entries(params)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&')
+  )
+}
+
+// ClientOnly component to prevent hydration errors with random rendering
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return <>{children}</>;
+}
 
 export default function CryptarithmeticVisualizer() {
   const [firstWord, setFirstWord] = useState("")
@@ -57,32 +77,10 @@ export default function CryptarithmeticVisualizer() {
   const [isLoading, setIsLoading] = useState(false)
   const [equations, setEquations] = useState<string[]>([])
   const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-
-    console.log("starting progeam.............................")
-    // Create a new EventSource to listen for updates from the backend
-    const eventSource = new EventSource("http://localhost:5000/solve")
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      // Update the solution and steps based on the received data
-      setSolution(data.assignments)
-      setSteps((prevSteps) => [...prevSteps, ...data.steps])
-    }
-
-    eventSource.onerror = (error) => {
-      console.error("Error during fetch:", error)
-      setError("Error contacting backend. Make sure the server is running.")
-      eventSource.close() // Close the connection on error
-    }
-
-    // Cleanup the EventSource on component unmount
-    return () => {
-      eventSource.close()
-    }
-  }, [])
+  const [mounted, setMounted] = useState(false)
+  const [eventSource, setEventSource] = useState<EventSource | null>(null)
+  const [isFinished, setIsFinished] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
 
   // Reset the visualization
   const resetVisualization = () => {
@@ -113,46 +111,10 @@ export default function CryptarithmeticVisualizer() {
     setDigitToLetters(result)
   }
 
-  // Generate a sample solution for visualization purposes
-  const generateSampleSolution = async () => {
-    setError(null)
-    setIsLoading(true)
-
-    console.log("just checking........................................")
-    const allLetters = [...new Set([...firstWord, ...secondWord, ...resultWord])]
-    setUniqueLetters(allLetters)
-
-    if (allLetters.length > 10) {
-      setError("Too many unique letters. Maximum is 10 (one for each digit 0-9).")
-      setIsLoading(false)
-      return
-    }
-
-    console.log("before sending............................")
-    // Send the initial request to start solving
-    const response = await fetch("http://localhost:5000/solve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        word1: firstWord,
-        word2: secondWord,
-        word3: resultWord,
-      }),
-    })
-
-    const data = await response.json() // Get the response data
-
-    // Process the steps and solution before switching to visualization
-    const processedSteps = data.steps || []
-    setSteps(processedSteps)
-    setSolution(data.assignments || {})
-    updateDigitToLetters(data.assignments || {})
-  }
-
   // Start or pause the visualization
   const toggleVisualization = () => {
     if (steps.length === 0) {
-      generateSampleSolution()
+      handleSolveButtonClick()
     }
     setIsRunning(!isRunning)
   }
@@ -200,6 +162,19 @@ export default function CryptarithmeticVisualizer() {
 
     return () => clearInterval(interval)
   }, [isRunning, currentStep, steps.length, speed])
+
+  useEffect(() => {
+    setIsClient(true)
+    setMounted(true)
+  }, [])
+
+  // Clean up EventSource on unmount
+  useEffect(() => {
+    setMounted(true)
+    return () => {
+      if (eventSource) eventSource.close()
+    }
+  }, [])
 
   // Format the equation with the current mapping
   const formatEquation = (mapping: LetterMapping = {}) => {
@@ -365,15 +340,106 @@ export default function CryptarithmeticVisualizer() {
     return Object.entries(assignments)
         .filter(([_, value]) => value !== null)
         .map(([letter, value]) => `${letter} = ${value}`)
-        .join('\n');
+        .join(', ');
   };
 
   // Function to handle the button click
   const handleSolveButtonClick = () => {
-    setIsLoading(true);
-    generateSampleSolution();
-    setActiveTab("visualization");
-  };
+    setIsLoading(true)
+    setSteps([])
+    setSolution(null)
+    setError(null)
+    setActiveTab("visualization")
+    setCurrentStep(0)
+    setDigitToLetters({})
+    setEquations([])
+
+    // Build query string for GET request (since EventSource only supports GET)
+    const params = buildQuery({
+      word1: firstWord,
+      word2: secondWord,
+      word3: resultWord,
+    })
+    const es = new EventSource(`http://localhost:5000/solve${params}`)
+    setEventSource(es)
+
+    let firstMessage = true
+    es.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      // First message contains equations
+      if (firstMessage && data.equations) {
+        setEquations(data.equations)
+        firstMessage = false
+        return
+      }
+      firstMessage = false
+      if (data.done) {
+        setSolution(data.assignments)
+        setIsFinished(true)
+        // Check if a valid solution exists (all letters assigned to digits)
+        const allAssigned = data.assignments && Object.values(data.assignments).every(v => v !== null && v !== undefined)
+        setIsSuccess(allAssigned)
+        es.close()
+        setEventSource(null)
+        setIsLoading(false)
+      } else {
+        setSteps((prev) => {
+          const newSteps = [...prev, data];
+          setCurrentStep(newSteps.length - 1);
+          updateDigitToLetters(data.mapping || {});
+          return newSteps;
+        });
+      }
+    }
+    es.onerror = (error) => {
+      setError("Error contacting backend. Make sure the server is running.")
+      es.close()
+      setEventSource(null)
+      setIsLoading(false)
+    }
+  }
+
+  // Render all equations and highlight the ones being used
+  const renderEquations = () => {
+    if (!equations.length) return null
+    const currentStepObj = steps[currentStep] || {}
+    const usedIndices = currentStepObj.equationsUsed || []
+    return (
+      <div className="mb-4">
+        <h3 className="text-lg font-medium text-white mb-2">Equations:</h3>
+        <div className="flex flex-wrap gap-2">
+          {equations.map((eq, idx) => (
+            <span
+              key={idx}
+              className={`px-3 py-1 rounded-md font-mono text-sm border transition-all duration-200 ${usedIndices.includes(idx)
+                ? "bg-yellow-300 text-slate-900 border-yellow-400 font-bold"
+                : "bg-slate-700 text-white border-slate-600"}`}
+            >
+              {eq}
+            </span>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Render the progress list with step type, message, and equations used
+  const renderProgress = () => (
+    <div className="bg-slate-800 p-3 rounded-md h-64 overflow-y-auto font-mono text-sm">
+      {steps.slice(0, currentStep + 1).map((step, index) => (
+        <div
+          key={index}
+          className={`mb-2 ${index === currentStep ? "text-yellow-300 font-bold" : "text-gray-300"}`}
+        >
+          <span className="mr-2">[{step.stepType?.toUpperCase() || "STEP"}]</span>
+          {step.message}
+          {step.equationsUsed && step.equationsUsed.length > 0 && equations.length > 0 && (
+            <span className="ml-2 text-xs text-purple-300">using: {step.equationsUsed.map(i => equations[i]).join(", ")}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
 
   return (
     <div className="py-8">
@@ -576,8 +642,22 @@ export default function CryptarithmeticVisualizer() {
               </TabsContent>
 
               <TabsContent value="visualization">
+                {isFinished && (
+                  <div className={`mb-4 p-4 rounded-lg text-lg font-bold text-center border-2 ${isSuccess ? 'bg-green-700/80 border-green-400 text-white' : 'bg-red-700/80 border-red-400 text-white'}`}>
+                    {isSuccess ? (
+                      <>
+                        ✅ Solution Found!<br />
+                        <span className="font-mono text-base font-normal">{formatFinalSolution(solution || {})}</span>
+                      </>
+                    ) : (
+                      <>❌ No Solution Found.</>
+                    )}
+                  </div>
+                )}
                 {steps.length > 0 ? (
                   <div className="p-6">
+                    {/* Render all equations at the top */}
+                    {renderEquations()}
                     <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600 mb-4">
                       <h3 className="text-xl font-medium mb-2 text-center text-white">
                         {firstWord} + {secondWord} = {resultWord}
@@ -595,16 +675,7 @@ export default function CryptarithmeticVisualizer() {
                       {/* Progress section */}
                       <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
                         <h3 className="text-lg font-medium mb-2 text-white">Progress</h3>
-                        <div className="bg-slate-800 p-3 rounded-md h-64 overflow-y-auto font-mono text-sm">
-                          {steps.slice(0, currentStep + 1).map((step, index) => (
-                            <div
-                              key={index}
-                              className={`mb-1 ${index === currentStep ? "text-yellow-300 font-bold" : "text-gray-300"}`}
-                            >
-                              {step.message}
-                            </div>
-                          ))}
-                        </div>
+                        {renderProgress()}
 
                         {/* Controls */}
                         <div className="mt-4 space-y-4">
@@ -698,41 +769,29 @@ export default function CryptarithmeticVisualizer() {
       </div>
 
       {/* Floating math symbols for decoration */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute text-white text-opacity-5 font-mono"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-              fontSize: `${Math.random() * 40 + 20}px`,
-              transform: `rotate(${Math.random() * 360}deg)`,
-              opacity: Math.random() * 0.2 + 0.1,
-            }}
-          >
-            {
-              ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "=", "×", "÷", "−", "√"][
-                Math.floor(Math.random() * 16)
-              ]
-            }
-          </div>
-        ))}
-      </div>
-
-      {solution && (
-        <div className="final-solution">
-          <h3>Solution Found:</h3>
-          <pre>{formatFinalSolution(solution)}</pre>
+      <ClientOnly>
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          {Array.from({ length: 30 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute text-white text-opacity-5 font-mono"
+              style={{
+                top: `${Math.random() * 100}%`,
+                left: `${Math.random() * 100}%`,
+                fontSize: `${Math.random() * 40 + 20}px`,
+                transform: `rotate(${Math.random() * 360}deg)`,
+                opacity: Math.random() * 0.2 + 0.1,
+              }}
+            >
+              {
+                ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "=", "×", "÷", "−", "√"][
+                  Math.floor(Math.random() * 16)
+                ]
+              }
+            </div>
+          ))}
         </div>
-      )}
-
-      {/* Display steps if needed */}
-      {steps.map((step, index) => (
-        <div key={index}>
-          <p>{step.message}</p>
-        </div>
-      ))}
+      </ClientOnly>
     </div>
   )
 }
