@@ -68,6 +68,7 @@ export default function CryptarithmeticVisualizer() {
   const [speed, setSpeed] = useState(50)
   const [isRunning, setIsRunning] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
+  const [playSpeed, setPlaySpeed] = useState(300) // ms
   const [solution, setSolution] = useState<LetterMapping | null>(null)
   const [steps, setSteps] = useState<SolutionStep[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -81,6 +82,10 @@ export default function CryptarithmeticVisualizer() {
   const [eventSource, setEventSource] = useState<EventSource | null>(null)
   const [isFinished, setIsFinished] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const [sliderValue, setSliderValue] = useState(100) // percent, default to 100%
+  const [showAnswer, setShowAnswer] = useState(false)
+  const answerButtonRef = useRef<HTMLButtonElement>(null)
 
   // Reset the visualization
   const resetVisualization = () => {
@@ -136,15 +141,13 @@ export default function CryptarithmeticVisualizer() {
     }
   }
 
-  // Advance the visualization based on the speed
+  // Play/Resume auto-advances steps at a user-controlled interval
   useEffect(() => {
     if (!isRunning || steps.length === 0 || currentStep >= steps.length - 1) {
       setIsRunning(false)
       return
     }
-
-    const interval = setInterval(
-      () => {
+    const interval = setInterval(() => {
         setCurrentStep((prev) => {
           const next = prev + 1
           if (next >= steps.length - 1) {
@@ -153,15 +156,9 @@ export default function CryptarithmeticVisualizer() {
           }
           return next
         })
-
-        // Update digit to letters mapping
-        updateDigitToLetters(steps[currentStep + 1]?.mapping || {})
-      },
-      1000 - speed * 9,
-    ) // Speed ranges from 100ms to 1000ms
-
+    }, playSpeed)
     return () => clearInterval(interval)
-  }, [isRunning, currentStep, steps.length, speed])
+  }, [isRunning, currentStep, steps.length, playSpeed])
 
   useEffect(() => {
     setIsClient(true)
@@ -175,6 +172,18 @@ export default function CryptarithmeticVisualizer() {
       if (eventSource) eventSource.close()
     }
   }, [])
+
+  // Auto-scroll progress to bottom when currentStep changes and isRunning or after Next
+  useEffect(() => {
+    if (progressRef.current) {
+      progressRef.current.scrollTop = progressRef.current.scrollHeight
+    }
+  }, [currentStep, isRunning])
+
+  // Sync sliderValue with playSpeed when isFinished changes
+  useEffect(() => {
+    setSliderValue(Math.round(((2000 - playSpeed) / 1950) * 100))
+  }, [playSpeed, isFinished])
 
   // Format the equation with the current mapping
   const formatEquation = (mapping: LetterMapping = {}) => {
@@ -192,8 +201,7 @@ export default function CryptarithmeticVisualizer() {
             className="relative"
           >
             <div
-              className={`w-16 h-16 m-1 rounded-xl flex items-center justify-center shadow-lg ${
-                value !== null ? digitColor : "bg-gray-200 dark:bg-gray-700"
+              className={`w-16 h-16 m-1 rounded-xl flex items-center justify-center shadow-lg ${value !== null ? digitColor : "bg-gray-200 dark:bg-gray-700"
               }`}
             >
               <span className="text-3xl font-bold text-white">{value !== null ? value : letter}</span>
@@ -340,7 +348,7 @@ export default function CryptarithmeticVisualizer() {
     return Object.entries(assignments)
         .filter(([_, value]) => value !== null)
         .map(([letter, value]) => `${letter} = ${value}`)
-        .join(', ');
+      .join(', ');
   };
 
   // Function to handle the button click
@@ -353,8 +361,10 @@ export default function CryptarithmeticVisualizer() {
     setCurrentStep(0)
     setDigitToLetters({})
     setEquations([])
+    setIsFinished(false)
+    setIsSuccess(false)
+    setIsRunning(false)
 
-    // Build query string for GET request (since EventSource only supports GET)
     const params = buildQuery({
       word1: firstWord,
       word2: secondWord,
@@ -366,7 +376,6 @@ export default function CryptarithmeticVisualizer() {
     let firstMessage = true
     es.onmessage = (event) => {
       const data = JSON.parse(event.data)
-      // First message contains equations
       if (firstMessage && data.equations) {
         setEquations(data.equations)
         firstMessage = false
@@ -376,7 +385,6 @@ export default function CryptarithmeticVisualizer() {
       if (data.done) {
         setSolution(data.assignments)
         setIsFinished(true)
-        // Check if a valid solution exists (all letters assigned to digits)
         const allAssigned = data.assignments && Object.values(data.assignments).every(v => v !== null && v !== undefined)
         setIsSuccess(allAssigned)
         es.close()
@@ -384,11 +392,10 @@ export default function CryptarithmeticVisualizer() {
         setIsLoading(false)
       } else {
         setSteps((prev) => {
-          const newSteps = [...prev, data];
-          setCurrentStep(newSteps.length - 1);
-          updateDigitToLetters(data.mapping || {});
-          return newSteps;
-        });
+          const newSteps = [...prev, data]
+          return newSteps
+        })
+        updateDigitToLetters(data.mapping || {})
       }
     }
     es.onerror = (error) => {
@@ -425,7 +432,7 @@ export default function CryptarithmeticVisualizer() {
 
   // Render the progress list with step type, message, and equations used
   const renderProgress = () => (
-    <div className="bg-slate-800 p-3 rounded-md h-64 overflow-y-auto font-mono text-sm">
+    <div ref={progressRef} className="bg-slate-800 p-3 rounded-md h-64 overflow-y-auto font-mono text-sm">
       {steps.slice(0, currentStep + 1).map((step, index) => (
         <div
           key={index}
@@ -440,6 +447,12 @@ export default function CryptarithmeticVisualizer() {
       ))}
     </div>
   )
+
+  useEffect(() => {
+    if (isFinished && !showAnswer) {
+      answerButtonRef.current?.blur();
+    }
+  }, [isFinished, showAnswer]);
 
   return (
     <div className="py-8">
@@ -642,22 +655,16 @@ export default function CryptarithmeticVisualizer() {
               </TabsContent>
 
               <TabsContent value="visualization">
-                {isFinished && (
-                  <div className={`mb-4 p-4 rounded-lg text-lg font-bold text-center border-2 ${isSuccess ? 'bg-green-700/80 border-green-400 text-white' : 'bg-red-700/80 border-red-400 text-white'}`}>
-                    {isSuccess ? (
-                      <>
-                        ✅ Solution Found!<br />
-                        <span className="font-mono text-base font-normal">{formatFinalSolution(solution || {})}</span>
-                      </>
-                    ) : (
-                      <>❌ No Solution Found.</>
-                    )}
+                {!isFinished ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-500 mb-4"></div>
+                    <p className="text-lg text-gray-300">Finding solution...</p>
                   </div>
-                )}
-                {steps.length > 0 ? (
+                ) : (
+                  steps.length > 0 && (
                   <div className="p-6">
-                    {/* Render all equations at the top */}
-                    {renderEquations()}
+                      {/* Render all equations at the top */}
+                      {renderEquations()}
                     <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600 mb-4">
                       <h3 className="text-xl font-medium mb-2 text-center text-white">
                         {firstWord} + {secondWord} = {resultWord}
@@ -675,38 +682,24 @@ export default function CryptarithmeticVisualizer() {
                       {/* Progress section */}
                       <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
                         <h3 className="text-lg font-medium mb-2 text-white">Progress</h3>
-                        {renderProgress()}
+                          {renderProgress()}
 
                         {/* Controls */}
                         <div className="mt-4 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-300">Speed</span>
-                            <Badge variant="outline" className="bg-slate-700 text-gray-300 border-slate-600">
-                              {speed}%
-                            </Badge>
-                          </div>
-                          <Slider
-                            value={[speed]}
-                            min={1}
-                            max={100}
-                            step={1}
-                            onValueChange={(value) => setSpeed(value[0])}
-                          />
-
-                          <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-4 gap-2">
                             <Button
                               variant="outline"
                               onClick={resetVisualization}
                               className="bg-slate-700 border-slate-600 hover:bg-slate-600 text-white"
+                                disabled={isLoading}
                             >
                               <RotateCcw className="h-4 w-4 mr-2" />
                               Reset
                             </Button>
                             <Button
-                              onClick={toggleVisualization}
-                              disabled={currentStep >= steps.length - 1}
-                              className={`${
-                                isRunning
+                                onClick={() => setIsRunning((prev) => !prev)}
+                                disabled={!isFinished || currentStep >= steps.length - 1}
+                                className={`${isRunning
                                   ? "bg-amber-600 hover:bg-amber-700"
                                   : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                               } text-white`}
@@ -724,15 +717,53 @@ export default function CryptarithmeticVisualizer() {
                               )}
                             </Button>
                             <Button
-                              onClick={nextStep}
-                              disabled={currentStep >= steps.length - 1}
+                                onClick={() => {
+                                  if (currentStep < steps.length - 1) setCurrentStep(currentStep + 1)
+                                }}
+                                disabled={!isFinished || currentStep >= steps.length - 1}
                               className="bg-slate-700 border-slate-600 hover:bg-slate-600 text-white"
                             >
                               <SkipForward className="h-4 w-4 mr-2" />
                               Next
                             </Button>
+                              <Button
+                                ref={answerButtonRef}
+                                onClick={() => {
+                                  setShowAnswer(true)
+                                  setIsRunning(false)
+                                  answerButtonRef.current?.blur()
+                                }}
+                                disabled={!isFinished || steps.length === 0 || showAnswer}
+                                className={
+                                  (!isFinished || steps.length === 0 || showAnswer)
+                                    ? "bg-slate-700 text-slate-400 font-semibold px-6 py-3 text-base rounded-md transition-colors duration-200 cursor-not-allowed pointer-events-none"
+                                    : "bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold px-6 py-3 text-base rounded-md transition-colors duration-200"
+                                }
+                              >
+                                <Calculator className="h-4 w-4 mr-2" />
+                                Answer
+                              </Button>
+                            </div>
                           </div>
+
+                          {isFinished && (
+                            <div className="flex items-center justify-between mb-4">
+                              <span className="text-sm text-gray-300">Speed</span>
+                              <Slider
+                                value={[sliderValue]}
+                                min={0}
+                                max={100}
+                                step={1}
+                                onValueChange={([percent]) => setSliderValue(percent)}
+                                onValueCommit={([percent]) => setPlaySpeed(2000 - Math.round((percent / 100) * 1950))}
+                                className="flex-1 mx-4"
+                                disabled={!isFinished}
+                              />
+                              <Badge variant="outline" className="bg-slate-700 text-gray-300 border-slate-600 ml-2">
+                                {sliderValue}%
+                              </Badge>
                         </div>
+                          )}
 
                         {renderDomains()}
                       </div>
@@ -744,23 +775,37 @@ export default function CryptarithmeticVisualizer() {
                           {renderDecisionTree()}
                         </div>
                       </div>
+                      </div>
+
+                      {showAnswer && solution && (
+                        <div className="p-6 mb-4 bg-slate-800 rounded-xl border border-slate-600">
+                          <h3 className="text-xl font-bold text-green-400 mb-2">Answer</h3>
+                          <div className="mb-4 font-mono text-lg text-white">{formatFinalSolution(solution)}</div>
+                          <h4 className="text-lg font-medium text-white mb-2">Final Domains:</h4>
+                          {steps.length > 0 && steps[steps.length - 1]?.domains ? (
+                            <div className="bg-slate-700 p-3 rounded-md text-sm font-mono mb-4">
+                              {Object.entries(steps[steps.length - 1].domains).map(([letter, domain], idx) => (
+                                <div key={idx} className="mb-1 text-white">
+                                  {letter}: [{domain.join(", ")}]
+                                </div>
+                              ))}
+                            </div>
+                          ) : <div className="text-gray-400">No domain info available.</div>}
+                          <h4 className="text-lg font-medium text-white mb-2">Final Decision Tree:</h4>
+                          <div className="flex flex-col items-center space-y-2">
+                            {Object.entries(solution).filter(([_, v]) => v !== null).map(([letter, value], idx, arr) => (
+                              <div key={idx} className="flex flex-col items-center">
+                                <div className="w-40 h-12 bg-sky-200 rounded-md flex items-center justify-center text-slate-800 font-bold">
+                                  {letter}={value}
+                                </div>
+                                {idx < arr.length - 1 && <div className="h-6 w-0.5 bg-gray-400"></div>}
+                              </div>
+                            ))}
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-16">
-                    <div className="inline-block p-6 bg-slate-700 rounded-full mb-4">
-                      <Calculator className="h-12 w-12 text-purple-400" />
+                      )}
                     </div>
-                    <p className="text-gray-300 mb-4 text-lg">
-                      No visualization available. Please solve a puzzle first.
-                    </p>
-                    <Button
-                      onClick={() => setActiveTab("input")}
-                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-                    >
-                      Go to Input
-                    </Button>
-                  </div>
+                  )
                 )}
               </TabsContent>
             </Tabs>
@@ -770,27 +815,27 @@ export default function CryptarithmeticVisualizer() {
 
       {/* Floating math symbols for decoration */}
       <ClientOnly>
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          {Array.from({ length: 30 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute text-white text-opacity-5 font-mono"
-              style={{
-                top: `${Math.random() * 100}%`,
-                left: `${Math.random() * 100}%`,
-                fontSize: `${Math.random() * 40 + 20}px`,
-                transform: `rotate(${Math.random() * 360}deg)`,
-                opacity: Math.random() * 0.2 + 0.1,
-              }}
-            >
-              {
-                ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "=", "×", "÷", "−", "√"][
-                  Math.floor(Math.random() * 16)
-                ]
-              }
-            </div>
-          ))}
-        </div>
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {Array.from({ length: 30 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute text-white text-opacity-5 font-mono"
+            style={{
+              top: `${Math.random() * 100}%`,
+              left: `${Math.random() * 100}%`,
+              fontSize: `${Math.random() * 40 + 20}px`,
+              transform: `rotate(${Math.random() * 360}deg)`,
+              opacity: Math.random() * 0.2 + 0.1,
+            }}
+          >
+            {
+                ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "=", "x", "÷", "-", "√"][
+                Math.floor(Math.random() * 16)
+              ]
+            }
+          </div>
+        ))}
+      </div>
       </ClientOnly>
     </div>
   )
